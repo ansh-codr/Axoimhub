@@ -1,0 +1,88 @@
+# =============================================================================
+# Axiom Design Engine - Staging Overlay
+# Staging environment configurations
+# =============================================================================
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: ai-platform-staging
+
+resources:
+  - ../../base
+
+# Staging name suffix
+nameSuffix: "-staging"
+
+# Staging labels
+commonLabels:
+  environment: staging
+
+# Staging images
+images:
+  - name: axiom-engine/backend
+    newName: your-registry.com/axiom-engine/backend
+    newTag: staging
+  - name: axiom-engine/frontend
+    newName: your-registry.com/axiom-engine/frontend
+    newTag: staging
+  - name: axiom-engine/worker-gpu
+    newName: your-registry.com/axiom-engine/worker-gpu
+    newTag: staging
+  - name: axiom-engine/worker-cpu
+    newName: your-registry.com/axiom-engine/worker-cpu
+    newTag: staging
+
+# Staging patches - reduced resources
+patches:
+  # Reduce backend replicas
+  - target:
+      kind: Deployment
+      name: axiom-backend
+    patch: |
+      - op: replace
+        path: /spec/replicas
+        value: 1
+  
+  # Reduce frontend replicas
+  - target:
+      kind: Deployment
+      name: axiom-frontend
+    patch: |
+      - op: replace
+        path: /spec/replicas
+        value: 1
+  
+  # Reduce worker-cpu replicas
+  - target:
+      kind: Deployment
+      name: axiom-worker-cpu
+    patch: |
+      - op: replace
+        path: /spec/replicas
+        value: 1
+
+  # Staging resource limits
+  - target:
+      kind: Deployment
+      name: axiom-backend
+    patch: |
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            cpu: "250m"
+            memory: "256Mi"
+          limits:
+            cpu: "1000m"
+            memory: "1Gi"
+
+# Override namespace
+namespace: ai-platform-staging
+
+# Staging config
+configMapGenerator:
+  - name: axiom-env
+    behavior: merge
+    literals:
+      - APP_ENV=staging
+      - LOG_LEVEL=INFO

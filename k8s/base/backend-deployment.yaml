@@ -1,0 +1,118 @@
+# =============================================================================
+# Axiom Design Engine - Backend Deployment
+# FastAPI application server
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: axiom-backend
+  namespace: ai-platform
+  labels:
+    app.kubernetes.io/name: axiom-backend
+    app.kubernetes.io/component: api
+    app.kubernetes.io/part-of: axiom-engine
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: axiom-backend
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: axiom-backend
+        app.kubernetes.io/component: api
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: axiom-backend
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+        - name: backend
+          image: axiom-engine/backend:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: axiom-config
+            - secretRef:
+                name: axiom-secrets
+          env:
+            - name: BACKEND_INTERNAL_URL
+              value: "http://axiom-backend-service:8000"
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "2000m"
+              memory: "2Gi"
+          livenessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /api/v1/ready
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          volumeMounts:
+            - name: storage
+              mountPath: /data/axiom-storage
+      volumes:
+        - name: storage
+          persistentVolumeClaim:
+            claimName: axiom-storage-pvc
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: axiom-backend
+                topologyKey: kubernetes.io/hostname
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: axiom-backend-service
+  namespace: ai-platform
+  labels:
+    app.kubernetes.io/name: axiom-backend
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8000
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    app.kubernetes.io/name: axiom-backend
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: axiom-backend
+  namespace: ai-platform
+  labels:
+    app.kubernetes.io/name: axiom-backend

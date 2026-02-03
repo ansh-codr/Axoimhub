@@ -1,0 +1,38 @@
+# =============================================================================
+# Axiom Design Engine - Persistent Volume Claims
+# Storage configuration for data persistence
+# =============================================================================
+
+# Storage for generated assets
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: axiom-storage-pvc
+  namespace: ai-platform
+  labels:
+    app.kubernetes.io/name: axiom-engine
+    app.kubernetes.io/component: storage
+spec:
+  accessModes:
+    - ReadWriteMany  # Allow multiple pods to access
+  storageClassName: standard
+  resources:
+    requests:
+      storage: 100Gi
+---
+# Storage for AI models
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: axiom-models-pvc
+  namespace: ai-platform
+  labels:
+    app.kubernetes.io/name: axiom-engine
+    app.kubernetes.io/component: storage
+spec:
+  accessModes:
+    - ReadWriteMany  # Allow multiple GPU workers to access
+  storageClassName: standard
+  resources:
+    requests:
+      storage: 200Gi

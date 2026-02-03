@@ -1,0 +1,103 @@
+# =============================================================================
+# Axiom Design Engine - GPU Worker Deployment
+# Celery worker with GPU support
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: axiom-worker-gpu
+  namespace: ai-platform
+  labels:
+    app.kubernetes.io/name: axiom-worker-gpu
+    app.kubernetes.io/component: worker
+    app.kubernetes.io/part-of: axiom-engine
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: axiom-worker-gpu
+  strategy:
+    type: Recreate  # GPU pods need recreation, not rolling update
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: axiom-worker-gpu
+        app.kubernetes.io/component: worker
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9100"
+    spec:
+      serviceAccountName: axiom-worker
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      # GPU node selection
+      nodeSelector:
+        gpu: "true"
+      tolerations:
+        - key: "nvidia.com/gpu"
+          operator: "Exists"
+          effect: "NoSchedule"
+      containers:
+        - name: worker-gpu
+          image: axiom-engine/worker-gpu:latest
+          imagePullPolicy: Always
+          envFrom:
+            - configMapRef:
+                name: axiom-config
+            - secretRef:
+                name: axiom-secrets
+          env:
+            - name: CUDA_VISIBLE_DEVICES
+              value: "0"
+            - name: NVIDIA_VISIBLE_DEVICES
+              value: "all"
+            - name: BACKEND_INTERNAL_URL
+              value: "http://axiom-backend-service:8000"
+          resources:
+            requests:
+              cpu: "2000m"
+              memory: "8Gi"
+              nvidia.com/gpu: 1
+            limits:
+              cpu: "8000m"
+              memory: "24Gi"
+              nvidia.com/gpu: 1
+          volumeMounts:
+            - name: storage
+              mountPath: /data/axiom-storage
+            - name: models
+              mountPath: /data/models
+            - name: dshm
+              mountPath: /dev/shm
+          livenessProbe:
+            exec:
+              command:
+                - python
+                - -c
+                - "import torch; assert torch.cuda.is_available()"
+            initialDelaySeconds: 30
+            periodSeconds: 60
+            timeoutSeconds: 30
+            failureThreshold: 3
+      volumes:
+        - name: storage
+          persistentVolumeClaim:
+            claimName: axiom-storage-pvc
+        - name: models
+          persistentVolumeClaim:
+            claimName: axiom-models-pvc
+        # Shared memory for PyTorch DataLoader
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 8Gi
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: axiom-worker
+  namespace: ai-platform
+  labels:
+    app.kubernetes.io/name: axiom-worker

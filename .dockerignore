@@ -1,0 +1,75 @@
+# =============================================================================
+# Axiom Design Engine - Docker Ignore
+# Exclude files from Docker build context
+# =============================================================================
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Documentation
+*.md
+!README.md
+docs/
+
+# Development files
+.env
+.env.*
+!.env.example
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Test files
+**/tests/
+**/__tests__/
+**/*.test.*
+**/*.spec.*
+.pytest_cache/
+.coverage
+htmlcov/
+coverage/
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+.eggs/
+
+# Node.js
+node_modules/
+.next/
+.nuxt/
+.cache/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+*.so
+.venv/
+venv/
+env/
+
+# Logs
+*.log
+logs/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Kubernetes
+k8s/
+
+# Local data
+data/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp

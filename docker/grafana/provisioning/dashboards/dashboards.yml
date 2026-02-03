@@ -1,0 +1,17 @@
+# =============================================================================
+# Axiom Design Engine - Grafana Dashboard Provisioning
+# Automatically load dashboards from directory
+# =============================================================================
+apiVersion: 1
+
+providers:
+  - name: 'Axiom Dashboards'
+    orgId: 1
+    folder: 'Axiom'
+    folderUid: 'axiom'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards/json

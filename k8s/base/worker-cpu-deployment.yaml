@@ -1,0 +1,91 @@
+# =============================================================================
+# Axiom Design Engine - CPU Worker Deployment
+# Celery worker for callbacks and lightweight tasks
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: axiom-worker-cpu
+  namespace: ai-platform
+  labels:
+    app.kubernetes.io/name: axiom-worker-cpu
+    app.kubernetes.io/component: worker
+    app.kubernetes.io/part-of: axiom-engine
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: axiom-worker-cpu
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: axiom-worker-cpu
+        app.kubernetes.io/component: worker
+    spec:
+      serviceAccountName: axiom-worker
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+        - name: worker-cpu
+          image: axiom-engine/worker-cpu:latest
+          imagePullPolicy: Always
+          command:
+            - celery
+            - -A
+            - workers.celery_app
+            - worker
+            - --loglevel=INFO
+            - -Q
+            - queue_callbacks
+            - -c
+            - "4"
+          envFrom:
+            - configMapRef:
+                name: axiom-config
+            - secretRef:
+                name: axiom-secrets
+          env:
+            - name: BACKEND_INTERNAL_URL
+              value: "http://axiom-backend-service:8000"
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+          volumeMounts:
+            - name: storage
+              mountPath: /data/axiom-storage
+          livenessProbe:
+            exec:
+              command:
+                - celery
+                - -A
+                - workers.celery_app
+                - inspect
+                - ping
+            initialDelaySeconds: 30
+            periodSeconds: 60
+            timeoutSeconds: 30
+            failureThreshold: 3
+      volumes:
+        - name: storage
+          persistentVolumeClaim:
+            claimName: axiom-storage-pvc
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: axiom-worker-cpu
+                topologyKey: kubernetes.io/hostname

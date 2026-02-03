@@ -1,0 +1,85 @@
+# =============================================================================
+# Axiom Design Engine - Ingress Configuration
+# External access to services
+# =============================================================================
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: axiom-ingress
+  namespace: ai-platform
+  labels:
+    app.kubernetes.io/name: axiom-engine
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "500m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    # Rate limiting
+    nginx.ingress.kubernetes.io/limit-rps: "10"
+    nginx.ingress.kubernetes.io/limit-connections: "5"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - axiom.example.com
+        - api.axiom.example.com
+      secretName: axiom-tls-secret
+  rules:
+    # Frontend
+    - host: axiom.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: axiom-frontend-service
+                port:
+                  number: 3000
+    # API Backend
+    - host: api.axiom.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: axiom-backend-service
+                port:
+                  number: 8000
+---
+# WebSocket Ingress (separate for specific configuration)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: axiom-ws-ingress
+  namespace: ai-platform
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "86400"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "86400"
+    nginx.ingress.kubernetes.io/upstream-hash-by: "$remote_addr"
+    # WebSocket support
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      proxy_set_header Upgrade $http_upgrade;
+      proxy_set_header Connection "upgrade";
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - api.axiom.example.com
+      secretName: axiom-tls-secret
+  rules:
+    - host: api.axiom.example.com
+      http:
+        paths:
+          - path: /ws
+            pathType: Prefix
+            backend:
+              service:
+                name: axiom-backend-service
+                port:
+                  number: 8000

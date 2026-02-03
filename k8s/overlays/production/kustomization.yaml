@@ -1,0 +1,92 @@
+# =============================================================================
+# Axiom Design Engine - Production Overlay
+# Production-specific configurations
+# =============================================================================
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: ai-platform
+
+resources:
+  - ../../base
+
+# Production-specific name suffix
+nameSuffix: ""
+
+# Production labels
+commonLabels:
+  environment: production
+
+# Production images with specific tags
+images:
+  - name: axiom-engine/backend
+    newName: your-registry.com/axiom-engine/backend
+    newTag: v1.0.0
+  - name: axiom-engine/frontend
+    newName: your-registry.com/axiom-engine/frontend
+    newTag: v1.0.0
+  - name: axiom-engine/worker-gpu
+    newName: your-registry.com/axiom-engine/worker-gpu
+    newTag: v1.0.0
+  - name: axiom-engine/worker-cpu
+    newName: your-registry.com/axiom-engine/worker-cpu
+    newTag: v1.0.0
+
+# Production-specific patches
+patches:
+  # Increase backend replicas
+  - target:
+      kind: Deployment
+      name: axiom-backend
+    patch: |
+      - op: replace
+        path: /spec/replicas
+        value: 3
+  
+  # Increase frontend replicas
+  - target:
+      kind: Deployment
+      name: axiom-frontend
+    patch: |
+      - op: replace
+        path: /spec/replicas
+        value: 3
+  
+  # Increase worker-cpu replicas
+  - target:
+      kind: Deployment
+      name: axiom-worker-cpu
+    patch: |
+      - op: replace
+        path: /spec/replicas
+        value: 4
+
+  # Production resource limits for backend
+  - target:
+      kind: Deployment
+      name: axiom-backend
+    patch: |
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            cpu: "1000m"
+            memory: "1Gi"
+          limits:
+            cpu: "4000m"
+            memory: "4Gi"
+
+# Production config
+configMapGenerator:
+  - name: axiom-env
+    behavior: merge
+    literals:
+      - APP_ENV=production
+      - LOG_LEVEL=WARNING
+
+# Secret references (use external-secrets or sealed-secrets in real production)
+secretGenerator:
+  - name: axiom-secrets
+    behavior: replace
+    envs:
+      - secrets.env  # Create this file locally, do not commit

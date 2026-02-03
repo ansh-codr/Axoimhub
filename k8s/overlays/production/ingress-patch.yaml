@@ -1,0 +1,37 @@
+# Production Ingress Patch
+# Update with your production domain
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: axiom-ingress
+  namespace: ai-platform
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/limit-rps: "20"
+spec:
+  tls:
+    - hosts:
+        - axiom.yourdomain.com
+        - api.axiom.yourdomain.com
+      secretName: axiom-tls-prod
+  rules:
+    - host: axiom.yourdomain.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: axiom-frontend-service
+                port:
+                  number: 3000
+    - host: api.axiom.yourdomain.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: axiom-backend-service
+                port:
+                  number: 8000

@@ -1,0 +1,48 @@
+# =============================================================================
+# Axiom Design Engine - Kustomization Base
+# Base configuration for all environments
+# =============================================================================
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: axiom-engine-base
+
+namespace: ai-platform
+
+# Common labels applied to all resources
+commonLabels:
+  app.kubernetes.io/name: axiom-engine
+  app.kubernetes.io/managed-by: kustomize
+
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - secrets.yaml
+  - storage.yaml
+  - postgres-statefulset.yaml
+  - redis-deployment.yaml
+  - backend-deployment.yaml
+  - frontend-deployment.yaml
+  - worker-gpu-deployment.yaml
+  - worker-cpu-deployment.yaml
+  - ingress.yaml
+  - hpa.yaml
+  - network-policy.yaml
+
+# Images that can be overridden in overlays
+images:
+  - name: axiom-engine/backend
+    newTag: latest
+  - name: axiom-engine/frontend
+    newTag: latest
+  - name: axiom-engine/worker-gpu
+    newTag: latest
+  - name: axiom-engine/worker-cpu
+    newTag: latest
+
+# Config map generator
+configMapGenerator:
+  - name: axiom-env
+    literals:
+      - APP_ENV=production

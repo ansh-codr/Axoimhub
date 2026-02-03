@@ -1,0 +1,103 @@
+# =============================================================================
+# Axiom Design Engine - Frontend Deployment
+# Next.js application
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: axiom-frontend
+  namespace: ai-platform
+  labels:
+    app.kubernetes.io/name: axiom-frontend
+    app.kubernetes.io/component: web
+    app.kubernetes.io/part-of: axiom-engine
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: axiom-frontend
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: axiom-frontend
+        app.kubernetes.io/component: web
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        fsGroup: 1001
+      containers:
+        - name: frontend
+          image: axiom-engine/frontend:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 3000
+              protocol: TCP
+          env:
+            - name: NEXT_PUBLIC_API_BASE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: axiom-frontend-config
+                  key: NEXT_PUBLIC_API_BASE_URL
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: axiom-frontend
+                topologyKey: kubernetes.io/hostname
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: axiom-frontend-service
+  namespace: ai-platform
+  labels:
+    app.kubernetes.io/name: axiom-frontend
+spec:
+  type: ClusterIP
+  ports:
+    - port: 3000
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    app.kubernetes.io/name: axiom-frontend
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: axiom-frontend-config
+  namespace: ai-platform
+data:
+  NEXT_PUBLIC_API_BASE_URL: "https://api.axiom.example.com"
+  NEXT_PUBLIC_WS_URL: "wss://api.axiom.example.com"
