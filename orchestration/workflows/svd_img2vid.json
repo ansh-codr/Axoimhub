@@ -115,7 +115,7 @@
       "properties": {
         "Node name for S&R": "SVD_img2vid_Conditioning"
       },
-      "widgets_values": [1024, 576, 25, 127, 25, 0.02],
+      "widgets_values": [576, 320, 16, 127, 8, 0.02],
       "_meta": {
         "title": "SVD_img2vid_Conditioning"
       }
@@ -258,5 +258,65 @@
   "groups": [],
   "config": {},
   "extra": {},
-  "version": 0.4
+  "version": 0.4,
+  "_meta": {
+    "name": "SVD Image to Video",
+    "parameters": {
+      "source_image": {
+        "node_id": 2,
+        "widget": 0,
+        "type": "string"
+      },
+      "width": {
+        "node_id": 3,
+        "widget": 0,
+        "type": "int"
+      },
+      "height": {
+        "node_id": 3,
+        "widget": 1,
+        "type": "int"
+      },
+      "num_frames": {
+        "node_id": 3,
+        "widget": 2,
+        "type": "int"
+      },
+      "motion_bucket_id": {
+        "node_id": 3,
+        "widget": 3,
+        "type": "int"
+      },
+      "fps": {
+        "node_id": 3,
+        "widget": 4,
+        "type": "int"
+      },
+      "noise_aug_strength": {
+        "node_id": 3,
+        "widget": 5,
+        "type": "float"
+      },
+      "seed": {
+        "node_id": 4,
+        "widget": 0,
+        "type": "int"
+      },
+      "steps": {
+        "node_id": 4,
+        "widget": 2,
+        "type": "int"
+      },
+      "cfg_scale": {
+        "node_id": 4,
+        "widget": 3,
+        "type": "float"
+      },
+      "video_fps": {
+        "node_id": 6,
+        "widget": "frame_rate",
+        "type": "int"
+      }
+    }
+  }
 }

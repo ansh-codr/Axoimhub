@@ -149,6 +149,18 @@ class Settings(BaseSettings):
         return f"http://{self.comfyui_host}:{self.comfyui_port}"
 
     # =========================================================================
+    # Prompt Enhancer (LLM)
+    # =========================================================================
+    prompt_enhancer_mode: Literal["rules", "hf"] = "rules"
+    prompt_enhancer_endpoint: str = ""
+    prompt_enhancer_api_key: str = ""
+    prompt_enhancer_model: str = ""
+    prompt_enhancer_timeout_seconds: int = 30
+    prompt_enhancer_max_new_tokens: int = 120
+    prompt_enhancer_temperature: float = 0.7
+    prompt_enhancer_top_p: float = 0.95
+
+    # =========================================================================
     # Worker Settings
     # =========================================================================
     execution_mode: Literal["local", "cloud", "auto"] = "local"

@@ -174,7 +174,7 @@
     "parameters": {
       "input_image": {
         "node_id": 1,
-        "widget": "image",
+        "widget": 0,
         "type": "file"
       },
       "resolution": {

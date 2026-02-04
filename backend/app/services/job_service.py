@@ -115,9 +115,15 @@ class JobService:
             ResourceLimiter.validate_image_resolution(width, height)
 
         elif job_type == "video":
-            duration = parameters.get("duration_seconds", 3)
-            frames = parameters.get("frames", 24)
+            frames = parameters.get("num_frames", parameters.get("frames", 24))
             fps = parameters.get("fps", 8)
+            duration = parameters.get("duration_seconds")
+            if duration is None:
+                try:
+                    duration = int(frames) / int(fps)
+                except (TypeError, ValueError, ZeroDivisionError):
+                    duration = 3
+
             ResourceLimiter.validate_video_duration(duration)
             ResourceLimiter.validate_video_frames(frames, fps)
 

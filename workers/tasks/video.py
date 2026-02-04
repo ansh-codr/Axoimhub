@@ -46,11 +46,20 @@ class VideoGenerationTask(BaseGenerationTask):
         logger = self.get_logger(job_id)
 
         # Extract parameters
-        width = parameters.get("width", 1024)
-        height = parameters.get("height", 576)
+        width = parameters.get("width", 576)
+        height = parameters.get("height", 320)
         num_frames = min(parameters.get("num_frames", 24), 720)
         fps = parameters.get("fps", 24)
-        motion_bucket_id = parameters.get("motion_bucket_id", 127)
+        motion_bucket_id = parameters.get("motion_bucket_id")
+        if motion_bucket_id is None:
+            motion_strength = parameters.get("motion_strength")
+            if motion_strength is not None:
+                try:
+                    motion_bucket_id = max(1, min(255, int(float(motion_strength) * 255)))
+                except (TypeError, ValueError):
+                    motion_bucket_id = 127
+            else:
+                motion_bucket_id = 127
         seed = parameters.get("seed")
         model = parameters.get("model", "svd")
         source_image_path = parameters.get("source_image_path")
@@ -80,6 +89,30 @@ class VideoGenerationTask(BaseGenerationTask):
                 "height": height,
                 "num_frames": num_frames,
                 "fps": fps,
+                "video_fps": fps,
+                "motion_bucket_id": motion_bucket_id,
+                "seed": seed if seed is not None else -1,
+            }
+        elif model in {"svd", "svd_xt"}:
+            # Text-to-video via SDXL keyframe + SVD img2vid
+            keyframe = self._generate_keyframe_image(
+                prompt=prompt,
+                negative_prompt=parameters.get("negative_prompt", ""),
+                width=width,
+                height=height,
+                seed=seed,
+                steps=parameters.get("num_inference_steps", 20),
+                guidance_scale=parameters.get("guidance_scale", 7.0),
+            )
+
+            workflow_name = self._get_img2vid_workflow(model)
+            workflow_params = {
+                "source_image": keyframe,
+                "width": width,
+                "height": height,
+                "num_frames": num_frames,
+                "fps": fps,
+                "video_fps": fps,
                 "motion_bucket_id": motion_bucket_id,
                 "seed": seed if seed is not None else -1,
             }
@@ -166,6 +199,36 @@ class VideoGenerationTask(BaseGenerationTask):
             "animatediff": "animatediff_txt2vid",
         }
         return workflow_map.get(model, "mochi_txt2vid")
+
+    def _generate_keyframe_image(
+        self,
+        prompt: str,
+        negative_prompt: str,
+        width: int,
+        height: int,
+        seed: int | None,
+        steps: int,
+        guidance_scale: float,
+    ) -> bytes:
+        """Generate a single keyframe image for SVD img2vid."""
+        handler = ComfyUIHandler()
+        workflow_params = {
+            "prompt": prompt,
+            "negative_prompt": negative_prompt,
+            "width": width,
+            "height": height,
+            "steps": steps,
+            "cfg_scale": guidance_scale,
+            "seed": seed if seed is not None else -1,
+            "batch_size": 1,
+        }
+
+        images = handler.execute_workflow(
+            workflow_name="sdxl_txt2img",
+            parameters=workflow_params,
+        )
+
+        return images[0]
 
 
 # Register task

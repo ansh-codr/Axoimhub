@@ -147,7 +147,7 @@ services:
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
     volumes:
       - assets:/data/axiom-storage
-      - models:/data/models
+      - ./models:/data/models
     networks:
       - axiom-network
     profiles:
@@ -193,7 +193,7 @@ services:
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
     volumes:
-      - models:/data/models
+      - ./models:/data/models
       - comfyui-output:/data/output
       - ./orchestration/custom_nodes:/app/ComfyUI/custom_nodes:ro
     ports:

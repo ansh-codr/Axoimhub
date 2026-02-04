@@ -83,7 +83,6 @@ class ComfyUIHandler:
         # Queue the prompt
         prompt_id = await self._queue_prompt(workflow)
         logger.info(f"Queued prompt: {prompt_id}")
-
         # Monitor execution via WebSocket
         outputs = await self._monitor_execution(
             prompt_id,
@@ -266,6 +265,17 @@ class ComfyUIHandler:
         parameters: dict[str, Any],
     ) -> dict[str, Any]:
         """Inject parameters into workflow nodes."""
+        # Upload image bytes when provided as parameters
+        for image_key in ("source_image", "input_image"):
+            if image_key in parameters and isinstance(
+                parameters[image_key], (bytes, bytearray)
+            ):
+                upload_result = self.upload_image(
+                    parameters[image_key],
+                    f"{image_key}.png",
+                )
+                parameters[image_key] = upload_result["name"]
+
         # Parameter mapping to node inputs
         param_mapping = {
             "prompt": [("positive_prompt", "text"), ("CLIPTextEncode", "text")],
@@ -277,7 +287,25 @@ class ComfyUIHandler:
             "seed": [("KSampler", "seed")],
             "scheduler": [("KSampler", "scheduler")],
             "batch_size": [("EmptyLatentImage", "batch_size")],
+            "source_image": [("source_image", "image")],
+            "input_image": [("input_image", "image")],
+            "fps": [("Video Combine", "frame_rate")],
         }
+
+        # If workflow provides explicit parameter bindings, prefer those
+        meta_params = workflow.get("_meta", {}).get("parameters", {})
+        if meta_params:
+            for param_name, param_value in parameters.items():
+                if param_value is None or param_name not in meta_params:
+                    continue
+
+                binding = meta_params[param_name]
+                node_id = binding.get("node_id")
+                widget = binding.get("widget")
+                if node_id is None or widget is None:
+                    continue
+
+                self._set_widget_value(workflow, node_id, widget, param_value)
 
         for param_name, param_value in parameters.items():
             if param_value is None:
@@ -290,6 +318,42 @@ class ComfyUIHandler:
 
         return workflow
 
+    def _set_widget_value(
+        self,
+        workflow: dict[str, Any],
+        node_id: int,
+        widget: int | str,
+        value: Any,
+    ) -> None:
+        """Set a widget value by node id and widget index/key."""
+        node_data = self._find_node_by_id(workflow, node_id)
+        if not node_data:
+            return
+
+        widgets = node_data.get("widgets_values")
+        if isinstance(widgets, list) and isinstance(widget, int):
+            # Ensure list is long enough
+            while len(widgets) <= widget:
+                widgets.append(None)
+            widgets[widget] = value
+        elif isinstance(widgets, dict) and isinstance(widget, str):
+            widgets[widget] = value
+
+    def _find_node_by_id(
+        self,
+        workflow: dict[str, Any],
+        node_id: int,
+    ) -> dict[str, Any] | None:
+        """Find node data by id for both workflow formats."""
+        if "nodes" in workflow and isinstance(workflow["nodes"], list):
+            for node in workflow["nodes"]:
+                if node.get("id") == node_id:
+                    return node
+            return None
+
+        # Prompt-style dict keyed by node id
+        return workflow.get(str(node_id)) or workflow.get(node_id)
+
     def _set_node_input(
         self,
         workflow: dict[str, Any],
@@ -298,27 +362,57 @@ class ComfyUIHandler:
         value: Any,
     ) -> None:
         """Set a node input value by node title or class type."""
-        for node_id, node_data in workflow.items():
+        nodes = workflow.get("nodes") if isinstance(workflow, dict) else None
+
+        if isinstance(nodes, list):
+            for node_data in nodes:
+                self._apply_node_input(node_data, node_identifier, input_name, value)
+            return
+
+        for _node_key, node_data in workflow.items():
             if not isinstance(node_data, dict):
                 continue
 
-            # Match by title or class_type
-            meta = node_data.get("_meta", {})
-            class_type = node_data.get("class_type", "")
-            title = meta.get("title", "")
+            self._apply_node_input(node_data, node_identifier, input_name, value)
 
-            if node_identifier in (title, class_type):
-                inputs = node_data.get("inputs", {})
-                if "." in input_name:
-                    # Nested input (e.g., "latent_image.width")
-                    parts = input_name.split(".")
-                    current = inputs
-                    for part in parts[:-1]:
-                        current = current.get(part, {})
-                    if isinstance(current, dict):
-                        current[parts[-1]] = value
-                else:
-                    inputs[input_name] = value
+    def _apply_node_input(
+        self,
+        node_data: dict[str, Any],
+        node_identifier: str,
+        input_name: str,
+        value: Any,
+    ) -> None:
+        """Apply input value to a single node if it matches the identifier."""
+        # Match by title or class type
+        meta = node_data.get("_meta", {})
+        class_type = node_data.get("class_type") or node_data.get("type", "")
+        title = meta.get("title", "")
+
+        if node_identifier not in (title, class_type):
+            return
+
+        if "widgets_values" in node_data and isinstance(
+            node_data["widgets_values"], dict
+        ):
+            if input_name in node_data["widgets_values"]:
+                node_data["widgets_values"][input_name] = value
+                return
+
+        inputs = node_data.get("inputs")
+        if not isinstance(inputs, dict):
+            inputs = {}
+            node_data["inputs"] = inputs
+
+        if "." in input_name:
+            parts = input_name.split(".")
+            current = inputs
+            for part in parts[:-1]:
+                if part not in current or not isinstance(current[part], dict):
+                    current[part] = {}
+                current = current[part]
+            current[parts[-1]] = value
+        else:
+            inputs[input_name] = value
 
     def get_queue_status(self) -> dict[str, Any]:
         """Get current queue status from ComfyUI."""

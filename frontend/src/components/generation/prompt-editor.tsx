@@ -23,6 +23,8 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { templatesApi } from "@/lib/api";
+import { useToast } from "@/store";
 import {
   Select,
   SelectContent,
@@ -48,19 +50,21 @@ const baseSchema = z.object({
 });
 
 const imageSchema = baseSchema.extend({
-  width: z.number().int().min(256).max(2048).default(1024),
-  height: z.number().int().min(256).max(2048).default(1024),
+  width: z.number().int().min(256).max(2048).default(768),
+  height: z.number().int().min(256).max(2048).default(768),
   num_inference_steps: z.number().int().min(1).max(150).default(30),
   guidance_scale: z.number().min(1).max(30).default(7.5),
+  model: z.enum(["sdxl"]).default("sdxl"),
   style: z.string().optional(),
 });
 
 const videoSchema = baseSchema.extend({
-  width: z.number().int().min(256).max(1920).default(512),
-  height: z.number().int().min(256).max(1080).default(512),
+  width: z.number().int().min(256).max(1920).default(576),
+  height: z.number().int().min(256).max(1080).default(320),
   num_frames: z.number().int().min(8).max(120).default(24),
   fps: z.number().int().min(1).max(60).default(24),
   motion_strength: z.number().min(0).max(1).default(0.5),
+  model: z.enum(["svd"]).default("svd"),
 });
 
 const model3dSchema = baseSchema.extend({
@@ -103,6 +107,8 @@ export function PromptEditor({
 }: PromptEditorProps) {
   const [jobType, setJobType] = React.useState<JobType>(defaultJobType);
   const [showAdvanced, setShowAdvanced] = React.useState(false);
+  const [isEnhancing, setIsEnhancing] = React.useState(false);
+  const toast = useToast();
 
   // Select schema based on job type
   const schema = React.useMemo(() => {
@@ -121,6 +127,8 @@ export function PromptEditor({
     handleSubmit,
     control,
     reset,
+    getValues,
+    setValue,
     formState: { errors, isValid },
   } = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -140,6 +148,42 @@ export function PromptEditor({
   const onSubmit = async (data: FormData) => {
     const { prompt, ...parameters } = data;
     await onGenerate(jobType, prompt, parameters);
+  };
+
+  const handleEnhancePrompt = async () => {
+    const currentPrompt = getValues("prompt")?.trim();
+    if (!currentPrompt) {
+      toast.warning(
+        "Prompt required",
+        "Enter a prompt before enhancing."
+      );
+      return;
+    }
+
+    setIsEnhancing(true);
+    try {
+      const response = await templatesApi.enhance(currentPrompt, jobType);
+      setValue("prompt", response.enhanced_prompt, { shouldValidate: true });
+
+      const currentNegative = getValues("negative_prompt")?.trim();
+      if (!currentNegative && response.default_negative_prompt) {
+        setValue("negative_prompt", response.default_negative_prompt, {
+          shouldValidate: true,
+        });
+      }
+
+      toast.success(
+        "Prompt enhanced",
+        "Your prompt was refined for better results."
+      );
+    } catch (error) {
+      toast.error(
+        "Enhancement failed",
+        "Please try again."
+      );
+    } finally {
+      setIsEnhancing(false);
+    }
   };
 
   return (
@@ -174,7 +218,18 @@ export function PromptEditor({
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
         {/* Main Prompt */}
         <div className="space-y-2">
-          <Label htmlFor="prompt">Prompt</Label>
+          <div className="flex items-center justify-between">
+            <Label htmlFor="prompt">Prompt</Label>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleEnhancePrompt}
+              isLoading={isEnhancing}
+            >
+              Enhance
+            </Button>
+          </div>
           <Textarea
             id="prompt"
             placeholder={getPlaceholder(jobType)}
@@ -228,6 +283,7 @@ export function PromptEditor({
             {jobType === "video" && (
               <VideoAdvancedSettings
                 register={register}
+                control={control}
                 errors={errors}
               />
             )}
@@ -286,6 +342,24 @@ function ImageAdvancedSettings({
 }) {
   return (
     <>
+      <div className="space-y-2">
+        <Label>Model</Label>
+        <Controller
+          name="model"
+          control={control}
+          render={({ field }) => (
+            <Select onValueChange={field.onChange} value={field.value}>
+              <SelectTrigger>
+                <SelectValue placeholder="SDXL" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="sdxl">SDXL (Recommended)</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
+        />
+      </div>
+
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label htmlFor="width">Width</Label>
@@ -360,13 +434,33 @@ function ImageAdvancedSettings({
 
 function VideoAdvancedSettings({
   register,
+  control,
   errors,
 }: {
   register: any;
+  control: any;
   errors: any;
 }) {
   return (
     <>
+      <div className="space-y-2">
+        <Label>Model</Label>
+        <Controller
+          name="model"
+          control={control}
+          render={({ field }) => (
+            <Select onValueChange={field.onChange} value={field.value}>
+              <SelectTrigger>
+                <SelectValue placeholder="SVD" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="svd">SVD (Recommended)</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
+        />
+      </div>
+
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label htmlFor="width">Width</Label>

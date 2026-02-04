@@ -15,9 +15,9 @@ from app.core.prompt_templates import (
     get_template,
     list_templates,
     apply_template,
-    enhance_prompt,
     get_default_negative_prompt,
 )
+from app.services.prompt_enhancer import PromptEnhancer
 
 
 router = APIRouter(prefix="/templates", tags=["Templates"])
@@ -185,7 +185,8 @@ async def enhance_prompt_endpoint(request: EnhancePromptRequest) -> EnhancePromp
             detail="asset_type must be one of: image, video, model3d",
         )
     
-    enhanced = enhance_prompt(request.prompt, request.asset_type)
+    enhancer = PromptEnhancer()
+    enhanced = await enhancer.enhance(request.prompt, request.asset_type)
     negative = get_default_negative_prompt(request.asset_type)
     
     return EnhancePromptResponse(

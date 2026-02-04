@@ -80,13 +80,13 @@ class VideoGenerationParams(BaseSchema):
     """Parameters specific to video generation."""
 
     width: int = Field(
-        default=1024,
+        default=576,
         ge=256,
         le=2048,
         description="Output video width",
     )
     height: int = Field(
-        default=576,
+        default=320,
         ge=256,
         le=1080,
         description="Output video height",

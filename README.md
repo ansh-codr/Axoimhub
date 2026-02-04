@@ -145,6 +145,51 @@ docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
 - Docker & Docker Compose
 - CUDA-capable GPU (12GB+ VRAM recommended)
 
+## Local GPU Setup (RTX 3060 8GB)
+
+This repo is pre-wired for SDXL (image), SVD (video), and TripoSR (3D) via ComfyUI.
+
+### 1) Prepare the test laptop
+
+- Install Docker Desktop.
+- Install NVIDIA drivers and NVIDIA Container Toolkit.
+
+### 2) Clone the repo
+
+git clone <your-repo-url>
+cd axiom-engine
+
+### 3) Install ComfyUI custom nodes
+
+Run:
+scripts/setup-comfyui-custom-nodes.sh
+
+### 4) Download model files
+
+Run:
+scripts/setup-comfyui-models.sh
+
+Then place these files:
+- models/checkpoints/sd_xl_base_1.0.safetensors
+- models/checkpoints/svd_xt_1_1.safetensors
+
+### 5) Start GPU services
+
+docker compose --profile gpu up --build
+
+### 6) Verify
+
+- Frontend: http://localhost:3000
+- Backend health: http://localhost:8000/api/v1/health
+- ComfyUI: http://localhost:8188
+
+### Recommended 8GB settings
+
+- Image: 768x768, steps 30
+- Video: 576x320, 16–24 frames, fps 8–12
+
+If you want additional models or higher resolutions, tell me the GPU VRAM and I’ll add the workflows.
+
 ## License
 
 MIT License - See LICENSE file for details.

@@ -2,9 +2,11 @@
 from app.services.asset_service import AssetService
 from app.services.job_service import JobService
 from app.services.project_service import ProjectService
+from app.services.prompt_enhancer import PromptEnhancer
 
 __all__ = [
     "AssetService",
     "JobService",
     "ProjectService",
+    "PromptEnhancer",
 ]
