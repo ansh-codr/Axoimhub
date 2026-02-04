@@ -8,6 +8,9 @@ A self-hosted, open-source AI platform for generating UI/UX-focused images, shor
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                              AXIOM DESIGN ENGINE                            │
 ├─────────────────────────────────────────────────────────────────────────────┤
+
+## Project Workflow (How it Works)
+
 │                                                                             │
 │  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐   │
 │  │   Frontend  │    │   Backend   │    │   Workers   │    │  ComfyUI    │   │
