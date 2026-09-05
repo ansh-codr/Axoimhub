@@ -12,6 +12,8 @@ from sqlalchemy.orm import selectinload
 
 from app.core.dependencies import CurrentUser, DbSession
 from app.core.exceptions import AuthorizationError, ProjectNotFoundError
+from app.core.storage import get_storage
+from app.models.asset import Asset
 from app.models.job import Job
 from app.models.project import Project
 from app.schemas.common import PaginatedResponse, SuccessResponse
@@ -268,7 +270,14 @@ async def delete_project(
     if project.user_id != user.id:
         raise AuthorizationError("You do not have access to this project")
 
-    # TODO: Delete all associated files from storage
+    # Delete all associated files from storage backend
+    assets_result = await db.execute(
+        select(Asset).join(Job).where(Job.project_id == project_id)
+    )
+    assets = assets_result.scalars().all()
+    storage = get_storage()
+    for asset in assets:
+        storage.delete(asset.storage_path)
 
     await db.delete(project)
     await db.commit()

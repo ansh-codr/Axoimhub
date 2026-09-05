@@ -158,16 +158,17 @@ class TripoSRHandler(BaseModelHandler):
             progress_callback(30, "Generating 3D model")
 
         # Run inference
+        if isinstance(self.model, MockTripoSRModel) or not hasattr(self.model, "run"):
+            raise RuntimeError(
+                "3D generation unavailable in this environment: TripoSR (tsr) is not installed or weights are missing."
+            )
+
         with torch.no_grad():
-            if hasattr(self.model, "run"):
-                scene_codes = self.model.run(
-                    image,
-                    device=self.device,
-                    chunk_size=8192,
-                )
-            else:
-                # Mock model fallback
-                scene_codes = self.model(image)
+            scene_codes = self.model.run(
+                image,
+                device=self.device,
+                chunk_size=8192,
+            )
 
         if progress_callback:
             progress_callback(70, "Extracting mesh")
@@ -208,8 +209,9 @@ class TripoSRHandler(BaseModelHandler):
                     threshold=25.0,
                 )
             else:
-                # Mock mesh
-                mesh = scene_code
+                raise RuntimeError(
+                    "3D generation unavailable: TripoSR extract_mesh is not available."
+                )
 
             # Export to requested format
             mesh_bytes = self._export_mesh(mesh, output_format, texture_resolution)
@@ -232,15 +234,13 @@ class TripoSRHandler(BaseModelHandler):
             if hasattr(mesh, "export"):
                 mesh.export(buffer, file_type=output_format)
             else:
-                # Create basic trimesh for mock
                 vertices = [[0, 0, 0], [1, 0, 0], [0, 1, 0]]
                 faces = [[0, 1, 2]]
                 tri_mesh = trimesh.Trimesh(vertices=vertices, faces=faces)
                 tri_mesh.export(buffer, file_type=output_format)
                 
-        except ImportError:
-            # Create placeholder GLB
-            buffer.write(b"MOCK_GLB_DATA")
+        except Exception as e:
+            raise RuntimeError(f"3D mesh export failed: {e}")
 
         buffer.seek(0)
         return buffer.read()
@@ -295,6 +295,11 @@ class ShapEHandler(BaseModelHandler):
         if progress_callback:
             progress_callback(20, "Generating latents")
 
+        if isinstance(self.model, MockShapEModel) or self.model is None:
+            raise RuntimeError(
+                "3D generation unavailable in this environment: Shap-E (shap_e) is not installed or weights are missing."
+            )
+
         try:
             from shap_e.diffusion.sample import sample_latents
             from shap_e.util.notebooks import decode_latent_mesh
@@ -327,9 +332,8 @@ class ShapEHandler(BaseModelHandler):
                 )
                 meshes.append(mesh_bytes)
 
-        except (ImportError, AttributeError):
-            # Mock generation
-            meshes = [b"MOCK_SHAPE_GLB_DATA"]
+        except Exception as e:
+            raise RuntimeError(f"Shap-E 3D generation failed: {e}")
 
         if progress_callback:
             progress_callback(100, "Complete")
@@ -352,24 +356,25 @@ class ShapEHandler(BaseModelHandler):
             else:
                 mesh.export(buffer, file_type=output_format)
                 
-        except (ImportError, AttributeError):
-            buffer.write(b"MOCK_GLB_DATA")
+        except Exception as e:
+            raise RuntimeError(f"3D mesh export failed: {e}")
 
         buffer.seek(0)
         return buffer.read()
 
 
 class MockTripoSRModel:
-    """Mock TripoSR model for testing without GPU."""
+    """Mock TripoSR model placeholder indicating missing dependencies."""
 
-    def __call__(self, image):
-        """Return mock scene codes."""
-        return [{"mock": True}]
+    def __call__(self, *args, **kwargs):
+        raise RuntimeError("3D generation unavailable in this environment: TripoSR is not installed.")
 
 
 class MockShapEModel:
-    """Mock Shap-E model for testing without GPU."""
-    pass
+    """Mock Shap-E model placeholder indicating missing dependencies."""
+
+    def __call__(self, *args, **kwargs):
+        raise RuntimeError("3D generation unavailable in this environment: Shap-E is not installed.")
 
 
 # Register default handlers

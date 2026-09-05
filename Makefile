@@ -67,7 +67,7 @@ install-frontend:
 
 dev:
 	@echo "Starting all services in development mode..."
-	docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d postgres redis
+	docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d db redis
 	@sleep 3
 	$(MAKE) -j3 dev-backend dev-frontend dev-worker
 
@@ -81,7 +81,7 @@ dev-frontend:
 
 dev-worker:
 	@echo "Starting Celery worker..."
-	cd workers && celery -A tasks worker --loglevel=info --concurrency=2
+	cd workers && celery -A celery_app worker --loglevel=info --concurrency=2
 
 dev-comfyui:
 	@echo "Starting ComfyUI..."
@@ -114,7 +114,10 @@ docker-shell-backend:
 	docker-compose exec backend /bin/bash
 
 docker-shell-worker:
-	docker-compose exec worker /bin/bash
+	docker-compose exec worker-cpu /bin/bash
+
+docker-shell-worker-gpu:
+	docker-compose exec worker-gpu /bin/bash
 
 # =============================================================================
 # Database

@@ -107,6 +107,8 @@ class HealthResponse(BaseSchema):
     status: str = "healthy"
     version: str
     environment: str
+    database: str | None = None
+    redis: str | None = None
 
 
 class IDResponse(BaseSchema):

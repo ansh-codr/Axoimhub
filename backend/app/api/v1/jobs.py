@@ -82,7 +82,7 @@ async def create_job(
     
     # Create and dispatch job
     job = await job_service.create_job(
-        user_id=user.id,
+        user=user,
         project_id=request.project_id,
         job_type=request.job_type.value,
         prompt=request.prompt,
@@ -267,7 +267,9 @@ async def cancel_job(
     job.completed_at = datetime.now(timezone.utc)
     await db.commit()
 
-    # TODO: Send cancellation signal to worker if running
+    # Send cancellation signal to worker
+    from app.core.celery import cancel_celery_job
+    cancel_celery_job(str(job.id))
 
     return SuccessResponse(message="Job cancelled successfully")
 
@@ -332,7 +334,17 @@ async def retry_job(
     await db.commit()
     await db.refresh(new_job)
 
-    # TODO: Dispatch to worker queue
+    # Dispatch to worker queue
+    from app.core.celery import dispatch_celery_job
+    dispatch_celery_job(
+        job_id=str(new_job.id),
+        job_type=str(new_job.job_type.value if hasattr(new_job.job_type, "value") else new_job.job_type),
+        user_id=str(user.id),
+        project_id=str(new_job.project_id),
+        prompt=new_job.prompt,
+        negative_prompt=new_job.negative_prompt,
+        parameters=new_job.parameters,
+    )
 
     return CreateJobResponse(
         job_id=new_job.id,

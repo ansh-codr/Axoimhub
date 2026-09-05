@@ -1,0 +1,42 @@
+# =============================================================================
+# Axiom Design Engine - Development Docker Compose Overrides
+# Bind-mounts source code for hot reload and enables development configurations
+# =============================================================================
+
+services:
+  backend:
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    environment:
+      - APP_ENV=development
+      - DEBUG=true
+      - LOG_LEVEL=DEBUG
+    volumes:
+      - ./backend/app:/app/app
+      - ./backend/migrations:/app/migrations
+      - ./storage:/app/storage
+      - assets:/data/axiom-storage
+
+  frontend:
+    environment:
+      - NODE_ENV=development
+    volumes:
+      - ./frontend/src:/app/src
+      - ./frontend/public:/app/public
+
+  worker-cpu:
+    command: ["celery", "-A", "workers.celery_app", "worker", "--loglevel=DEBUG", "-Q", "queue_callbacks,queue_image,queue_video,queue_3d", "-c", "2"]
+    environment:
+      - LOG_LEVEL=DEBUG
+    volumes:
+      - ./workers:/app/workers
+      - ./storage:/app/storage
+      - assets:/data/axiom-storage
+
+  worker-gpu:
+    environment:
+      - LOG_LEVEL=DEBUG
+    volumes:
+      - ./workers:/app/workers
+      - ./storage:/app/storage
+      - assets:/data/axiom-storage
+      - ./models:/data/models

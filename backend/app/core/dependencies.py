@@ -6,7 +6,7 @@ Reusable dependency injection components
 from typing import Annotated, AsyncGenerator
 from uuid import UUID
 
-from fastapi import Depends, Header, HTTPException, status
+from fastapi import Depends, Header, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -203,7 +203,42 @@ OptionalUser = Annotated[User | None, Depends(get_optional_user)]
 class RateLimiter:
     """
     Rate limiting dependency using Redis.
-    Implements token bucket algorithm.
+    Implements token bucket algorithm with atomic evaluation.
+    """
+
+    # Lua script for atomic token bucket evaluation
+    LUA_SCRIPT = """
+    local key = KEYS[1]
+    local capacity = tonumber(ARGV[1])
+    local refill_rate = tonumber(ARGV[2])
+    local now = tonumber(ARGV[3])
+    local requested = tonumber(ARGV[4])
+
+    local data = redis.call('HMGET', key, 'tokens', 'last_updated')
+    local tokens = tonumber(data[1])
+    local last_updated = tonumber(data[2])
+
+    if not tokens or not last_updated then
+        tokens = capacity
+        last_updated = now
+    else
+        local delta = math.max(0, now - last_updated)
+        tokens = math.min(capacity, tokens + (delta * refill_rate))
+        last_updated = now
+    end
+
+    if tokens >= requested then
+        tokens = tokens - requested
+        redis.call('HMSET', key, 'tokens', tokens, 'last_updated', last_updated)
+        local ttl = math.ceil(capacity / math.max(refill_rate, 0.001)) * 2 + 60
+        redis.call('EXPIRE', key, ttl)
+        return 1
+    else
+        redis.call('HMSET', key, 'tokens', tokens, 'last_updated', last_updated)
+        local ttl = math.ceil(capacity / math.max(refill_rate, 0.001)) * 2 + 60
+        redis.call('EXPIRE', key, ttl)
+        return 0
+    end
     """
 
     def __init__(
@@ -213,21 +248,68 @@ class RateLimiter:
     ):
         self.requests_per_minute = requests_per_minute
         self.burst = burst
+        self.refill_rate = requests_per_minute / 60.0
 
     async def __call__(
         self,
+        request: Request,
         x_forwarded_for: Annotated[str | None, Header()] = None,
+        authorization: Annotated[str | None, Header()] = None,
     ) -> None:
         """
         Check rate limit for the current request.
-        Uses X-Forwarded-For header or falls back to a default key.
+        Keyed by user ID (if authenticated) or client IP.
 
         Raises:
             HTTPException: 429 if rate limit exceeded
         """
-        # In production, implement proper rate limiting with Redis
-        # This is a placeholder that always passes
-        pass
+        import time
+        from app.core.redis import get_redis_client
+
+        # Determine identifier
+        identifier: str = "unknown"
+        if authorization and authorization.startswith("Bearer "):
+            try:
+                token = authorization.split(" ")[1]
+                payload = verify_token(token)
+                identifier = f"user:{payload.sub}"
+            except Exception:
+                identifier = f"token_hash:{hash(authorization)}"
+        
+        if identifier == "unknown":
+            if x_forwarded_for:
+                client_ip = x_forwarded_for.split(",")[0].strip()
+            elif request.client and request.client.host:
+                client_ip = request.client.host
+            else:
+                client_ip = "127.0.0.1"
+            identifier = f"ip:{client_ip}"
+
+        key = f"axiom:ratelimit:{identifier}"
+
+        try:
+            client = get_redis_client()
+            now = time.time()
+            allowed = await client.eval(
+                self.LUA_SCRIPT,
+                1,
+                key,
+                self.burst,
+                self.refill_rate,
+                now,
+                1,
+            )
+            if allowed == 0:
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail="Rate limit exceeded. Please try again later.",
+                )
+        except HTTPException:
+            raise
+        except Exception as e:
+            # If Redis connection fails, fail open and log warning
+            from app.core.logging import get_logger
+            get_logger(__name__).warning(f"Rate limiter Redis check failed: {e}")
 
 
 # Common rate limiter instance

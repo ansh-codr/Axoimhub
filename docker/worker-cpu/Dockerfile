@@ -65,6 +65,7 @@ WORKDIR /app
 # Copy worker code
 COPY --chown=axiom:axiom workers ./workers
 COPY --chown=axiom:axiom orchestration ./orchestration
+COPY --chown=axiom:axiom storage ./storage
 
 # Create data directories
 RUN mkdir -p /data/axiom-storage && chown -R axiom:axiom /data

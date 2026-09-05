@@ -84,7 +84,13 @@ RUN pip install --no-cache-dir \
     pillow>=10.2.0 \
     opencv-python-headless>=4.9.0 \
     numpy>=1.26.3 \
-    trimesh>=4.0.0
+    trimesh>=4.0.0 \
+    rembg>=2.0.50
+
+# Install 3D generation libraries (TripoSR and Shap-E)
+RUN pip install --no-cache-dir \
+    git+https://github.com/VAST-AI-Research/TripoSR.git \
+    git+https://github.com/openai/shap-e.git
 
 # =============================================================================
 # Production Image
@@ -101,6 +107,7 @@ WORKDIR /app
 # Copy worker code
 COPY --chown=axiom:axiom workers ./workers
 COPY --chown=axiom:axiom orchestration ./orchestration
+COPY --chown=axiom:axiom storage ./storage
 
 # Create data directories
 RUN mkdir -p /data/axiom-storage /data/models && \

@@ -87,13 +87,12 @@ class JobService:
 
         # Create job
         job = Job(
-            user_id=user.id,
             project_id=project_id,
             job_type=job_type,
             prompt=clean_prompt,
             negative_prompt=clean_negative,
             parameters=parameters,
-            status=JobStatus.PENDING,
+            status=JobStatus.QUEUED,
         )
 
         self.db.add(job)
@@ -101,7 +100,7 @@ class JobService:
         await self.db.refresh(job)
 
         # Dispatch to worker queue
-        await self._dispatch_job(job)
+        await self._dispatch_job(job, str(user.id))
 
         return job
 
@@ -131,25 +130,19 @@ class JobService:
             # 3D validation will happen during generation
             pass
 
-    async def _dispatch_job(self, job: Job) -> str:
+    async def _dispatch_job(self, job: Job, user_id: str) -> str:
         """Dispatch job to worker queue."""
-        # Import here to avoid circular dependency
-        from workers.dispatcher import JobDispatcher
+        from app.core.celery import dispatch_celery_job
 
-        task_id = JobDispatcher.dispatch(
+        task_id = dispatch_celery_job(
             job_id=str(job.id),
-            job_type=job.job_type,
-            user_id=str(job.user_id),
+            job_type=str(job.job_type.value if hasattr(job.job_type, "value") else job.job_type),
+            user_id=str(user_id),
             project_id=str(job.project_id),
             prompt=job.prompt,
             negative_prompt=job.negative_prompt,
             parameters=job.parameters,
         )
-
-        # Update job with task ID
-        job.task_id = task_id
-        job.status = JobStatus.QUEUED
-        await self.db.commit()
 
         return task_id
 

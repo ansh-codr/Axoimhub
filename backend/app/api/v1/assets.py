@@ -25,25 +25,34 @@ from app.schemas.asset import (
 )
 from app.schemas.common import PaginatedResponse, SuccessResponse
 
+from fastapi.responses import FileResponse, RedirectResponse
+from app.core.storage import get_storage
+from storage.adapters.local import LocalStorageAdapter
+
 router = APIRouter(prefix="/assets", tags=["Assets"])
 
 
 def generate_signed_url(asset: Asset) -> str:
     """
-    Generate a signed URL for asset access.
-    In production, this would generate an S3 pre-signed URL.
+    Generate a signed URL for asset access based on storage backend.
+    Local storage generates time-limited HMAC signed URL.
+    S3/MinIO generates presigned URL via boto3.
     """
-    # TODO: Implement actual signed URL generation based on storage backend
-    # For now, return a placeholder URL structure
+    storage = get_storage()
     base_url = f"http://localhost:{settings.backend_port}"
-    return f"{base_url}/api/v1/assets/{asset.id}/file"
+    return storage.generate_signed_url(
+        storage_path=asset.storage_path,
+        filename=asset.filename,
+        expires_in=settings.signed_url_expiration,
+        asset_id=str(asset.id),
+        base_url=base_url,
+    )
 
 
 def generate_thumbnail_url(asset: Asset) -> str | None:
     """Generate thumbnail URL for supported asset types."""
     if asset.asset_type in (AssetType.IMAGE, AssetType.VIDEO):
-        base_url = f"http://localhost:{settings.backend_port}"
-        return f"{base_url}/api/v1/assets/{asset.id}/thumbnail"
+        return generate_signed_url(asset)
     return None
 
 
@@ -254,11 +263,66 @@ async def delete_asset(
     if asset.job.project.user_id != user.id:
         raise AuthorizationError("You do not have access to this asset")
 
-    # TODO: Delete file from storage backend
-    # storage_service.delete(asset.storage_path)
+    # Delete file from storage backend
+    storage = get_storage()
+    storage.delete(asset.storage_path)
 
     # Delete database record
     await db.delete(asset)
     await db.commit()
 
     return SuccessResponse(message="Asset deleted successfully")
+
+
+@router.get(
+    "/{asset_id}/file",
+    summary="Download or Stream Asset File",
+    description="Serve asset binary file verifying HMAC signature and expiration timestamp.",
+)
+async def get_asset_file(
+    asset_id: UUID,
+    expires: int = Query(..., description="Expiration timestamp (epoch seconds)"),
+    signature: str = Query(..., description="HMAC SHA-256 signature"),
+    db: DbSession = None,
+):
+    """Serve asset file directly for local storage or redirect for S3."""
+    storage = get_storage()
+
+    # If local storage, verify signature and stream file
+    if isinstance(storage, LocalStorageAdapter):
+        if not storage.verify_signature(str(asset_id), expires, signature):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Signature is invalid or has expired",
+            )
+
+        result = await db.execute(select(Asset).where(Asset.id == asset_id))
+        asset = result.scalar_one_or_none()
+        if not asset:
+            raise AssetNotFoundError(str(asset_id))
+
+        file_path = storage.get_absolute_path(asset.storage_path)
+        if not file_path.is_file():
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="File not found on storage",
+            )
+
+        return FileResponse(
+            path=file_path,
+            media_type=asset.mime_type or "application/octet-stream",
+            filename=asset.filename,
+        )
+
+    # If S3/MinIO, redirect to presigned URL
+    result = await db.execute(select(Asset).where(Asset.id == asset_id))
+    asset = result.scalar_one_or_none()
+    if not asset:
+        raise AssetNotFoundError(str(asset_id))
+
+    url = storage.generate_signed_url(
+        storage_path=asset.storage_path,
+        filename=asset.filename,
+        expires_in=settings.signed_url_expiration,
+    )
+    return RedirectResponse(url=url)

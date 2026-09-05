@@ -52,6 +52,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     logger.info("Shutting down Axiom Design Engine")
     await close_db()
     logger.info("Database connection closed")
+    from app.core.redis import close_redis_client
+    await close_redis_client()
+    logger.info("Redis connection closed")
 
 
 def create_application() -> FastAPI:

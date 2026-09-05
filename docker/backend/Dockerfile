@@ -34,6 +34,7 @@ RUN pip install --upgrade pip setuptools wheel && \
     python-jose[cryptography]>=3.3.0 \
     passlib[bcrypt]>=1.7.4 \
     redis>=5.0.1 \
+    celery[redis]>=5.3.6 \
     httpx>=0.26.0 \
     python-multipart>=0.0.6 \
     orjson>=3.9.10 \
@@ -69,6 +70,7 @@ WORKDIR /app
 
 # Copy application code
 COPY --chown=axiom:axiom backend/app ./app
+COPY --chown=axiom:axiom storage ./storage
 COPY --chown=axiom:axiom backend/alembic.ini ./
 COPY --chown=axiom:axiom backend/migrations ./migrations
 
